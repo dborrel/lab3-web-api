@@ -1,6 +1,9 @@
 package es.unizar.webeng.lab3
 
 import com.ninjasquad.springmockk.MockkBean
+import io.mockk.every
+import io.mockk.justRun
+import io.mockk.verify
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
@@ -12,6 +15,7 @@ import org.springframework.test.web.servlet.delete
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
 import org.springframework.test.web.servlet.put
+import java.util.Optional
 
 private val MANAGER_REQUEST_BODY = { name: String ->
     """
@@ -47,7 +51,16 @@ class ControllerTests {
         // Hint: POST is not idempotent - each call creates a new resource.
         // Think about what the controller does when saving an employee.
         // Consider how to mock the repository to return different results for multiple calls.
-        TODO("Complete the mock setup for POST test")
+        // TODO("Complete the mock setup for POST test")
+
+        // SETUP - mockear el repositorio para crear dos empleados distintos
+        every {
+            employeeRepository.save(any<Employee>())
+        } answers {
+            Employee("Mary", "Manager", 1)
+        } andThenAnswer {
+            Employee("Mary", "Manager", 2)
+        }
 
         mvc
             .post("/employees") {
@@ -80,7 +93,12 @@ class ControllerTests {
         // VERIFY - COMPLETE ME!
         // Hint: What repository methods should be called for a POST operation?
         // What methods should NOT be called? Think about the difference between safe and unsafe operations.
-        TODO("Complete the verification for POST test")
+        // TODO("Complete the verification for POST test")
+
+        // VERIFY - el repositorio guardó dos empleados distintos
+        verify(exactly = 2) {
+            employeeRepository.save(any<Employee>())
+        }
     }
 
     @Test
@@ -89,7 +107,20 @@ class ControllerTests {
         // Hint: GET is safe and idempotent - it only reads data without side effects.
         // Look at the test expectations to understand what scenarios you need to mock.
         // Consider both successful and unsuccessful retrieval cases.
-        TODO("Complete the mock setup for GET test")
+        // TODO("Complete the mock setup for GET test")
+        // Mock para id=1 → existe
+        every {
+            employeeRepository.findById(1)
+        } answers {
+            Optional.of(Employee("Mary", "Manager", 1))
+        }
+
+        // Mock para id=2 → no existe
+        every {
+            employeeRepository.findById(2)
+        } answers {
+            Optional.empty()
+        }
 
         mvc.get("/employees/1").andExpect {
             status { isOk() }
@@ -114,7 +145,17 @@ class ControllerTests {
         // VERIFY - COMPLETE ME!
         // Hint: Since GET is safe, what repository methods should NOT be called?
         // Count how many times each method was called based on the test requests.
-        TODO("Complete the verification for GET test")
+        // TODO("Complete the verification for GET test")
+        // No se deben llamar métodos de modificación
+        verify(exactly = 0) {
+            employeeRepository.save(any<Employee>())
+            employeeRepository.deleteById(any())
+            employeeRepository.findAll()
+        }
+
+        // Verificar llamadas a findById
+        verify(exactly = 2) { employeeRepository.findById(1) }
+        verify(exactly = 1) { employeeRepository.findById(2) }
     }
 
     @Test
@@ -123,7 +164,22 @@ class ControllerTests {
         // Hint: PUT is idempotent but not safe - it modifies state but repeated calls have the same effect.
         // Study the controller logic to understand what it does when an employee exists vs. doesn't exist.
         // Consider how to mock the repository to simulate both scenarios.
-        TODO("Complete the mock setup for PUT test")
+        // TODO("Complete the mock setup for PUT test")
+        // findById: primero devuelve vacío (no existe), luego devuelve empleado (ya existe)
+        every {
+            employeeRepository.findById(1)
+        } answers {
+            Optional.empty()
+        } andThenAnswer {
+            Optional.of(Employee("Tom", "Manager", 1))
+        }
+
+        // save: devuelve siempre el empleado actualizado con id=1
+        every {
+            employeeRepository.save(any<Employee>())
+        } answers {
+            Employee("Tom", "Manager", 1)
+        }
 
         mvc
             .put("/employees/1") {
@@ -156,7 +212,18 @@ class ControllerTests {
         // VERIFY - COMPLETE ME!
         // Hint: What repository methods should be called for PUT operations?
         // Think about the controller logic and how many times each method should be invoked.
-        TODO("Complete the verification for PUT test")
+        // TODO("Complete the verification for PUT test")
+        // findById se llamó dos veces
+        verify(exactly = 2) { employeeRepository.findById(1) }
+
+        // save se llamó dos veces
+        verify(exactly = 2) { employeeRepository.save(any<Employee>()) }
+
+        // no se llaman métodos de eliminación ni findAll
+        verify(exactly = 0) {
+            employeeRepository.deleteById(any())
+            employeeRepository.findAll()
+        }
     }
 
     @Test
@@ -165,7 +232,21 @@ class ControllerTests {
         // Hint: DELETE is idempotent but not safe - it modifies state but repeated calls have the same effect.
         // Look at the controller implementation to see what repository method it calls.
         // Consider how to mock a method that doesn't return a value.
-        TODO("Complete the mock setup for DELETE test")
+        // TODO("Complete the mock setup for DELETE test")
+        // deleteById no devuelve nada, solo debe ejecutarse
+        justRun {
+            employeeRepository.deleteById(1)
+        }
+
+        // findById: opcional, si el controller lo consulta antes de eliminar
+        every {
+            employeeRepository.findById(1)
+        } answers {
+            Optional.of(Employee("Tom", "Manager", 1))
+        } andThenAnswer {
+            Optional.empty()
+        }
+
         mvc.delete("/employees/1").andExpect {
             status { isNoContent() }
         }
@@ -177,6 +258,12 @@ class ControllerTests {
         // VERIFY
         // Hint: What repository methods should be called for DELETE operations?
         // What methods should NOT be called? Think about the nature of DELETE operations.
-        TODO("Complete the verification for DELETE test")
+        // TODO("Complete the verification for DELETE test")
+        verify(exactly = 2) { employeeRepository.deleteById(1) }
+        verify(exactly = 0) {
+            employeeRepository.save(any<Employee>())
+            employeeRepository.findById(any())
+            employeeRepository.findAll()
+        }
     }
 }
